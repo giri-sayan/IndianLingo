@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Moon, Sun, Sparkles, Volume2, VolumeX, BookOpen, Target, RotateCcw, Check, Palette } from 'lucide-react';
+import { X, Moon, Sun, Sparkles, Volume2, VolumeX, Target, RotateCcw, Check, Palette } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 export default function SettingsModal({
@@ -15,14 +15,14 @@ export default function SettingsModal({
   onChangeDailyGoal,
   onResetProgress
 }) {
-  if (!isOpen) return null;
-
   const [activeTab, setActiveTab] = useState('appearance'); // 'appearance' | 'audio' | 'learning' | 'account'
+
+  if (!isOpen) return null;
 
   const themes = [
     {
       id: 'light',
-      name: 'Light Desi',
+      name: 'Light',
       desc: 'Clean, high contrast everyday look',
       icon: Sun,
       color: 'bg-white text-slate-800 border-slate-300'
@@ -47,7 +47,7 @@ export default function SettingsModal({
     { xp: 10, label: 'Casual', time: '3 mins / day' },
     { xp: 20, label: 'Regular', time: '7 mins / day' },
     { xp: 30, label: 'Serious', time: '12 mins / day' },
-    { xp: 50, label: 'Desi Polyglot', time: '20 mins / day' }
+    { xp: 50, label: 'Polyglot', time: '20 mins / day' }
   ];
 
   return (
@@ -138,7 +138,7 @@ export default function SettingsModal({
               <div>
                 <h3 className="font-extrabold text-sm">Theme Selection</h3>
                 <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Choose how BhashaLingo looks on your device.
+                  Choose how IndianLingo looks on your device.
                 </p>
               </div>
 

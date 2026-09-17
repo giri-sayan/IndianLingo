@@ -1,11 +1,12 @@
 {
-  "name": "new-folder",
+  "name": "indian-lingo",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node scripts/validate_courses.cjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },

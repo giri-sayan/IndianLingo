@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Heart, Volume2, CheckCircle2, XCircle, ArrowRight, RotateCcw, Turtle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Heart, Volume2, CheckCircle2, XCircle, ArrowRight, Turtle } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import Mascot from './Mascot';
 import { sounds } from '../utils/audio';
@@ -7,23 +7,24 @@ import { sounds } from '../utils/audio';
 export default function LessonModal({
   isOpen,
   lesson,
-  unit,
+  _unit,
   selectedLanguage,
   hearts,
   onDeductHeart,
   onCompleteLesson,
   onClose,
-  showTransliteration
+  showTransliteration,
+  equippedOutfit = 'default',
+  theme = 'light'
 }) {
-  if (!isOpen || !lesson) return null;
-
-  const questions = lesson.questions || [];
+  const isDark = theme === 'dark';
+  const questions = lesson?.questions || [];
   const [currentIdx, setCurrentIdx] = useState(0);
   
   // Interaction states
   const [selectedOption, setSelectedOption] = useState(null); // for multiple-choice & fill-blank & listening
   const [selectedSentenceWords, setSelectedSentenceWords] = useState([]); // for sentence-builder
-  const [matchedPairs, setMatchedPairs] = useState([]); // for match-pairs: list of matched left keys
+  const [matchedPairs, setMatchedPairs] = useState([]); // for match-pairs
   const [selectedPairLeft, setSelectedPairLeft] = useState(null);
   const [selectedPairRight, setSelectedPairRight] = useState(null);
   const [pairError, setPairError] = useState(false);
@@ -31,16 +32,21 @@ export default function LessonModal({
   // Status & Feedback
   const [status, setStatus] = useState('idle'); // 'idle' | 'correct' | 'wrong' | 'completed' | 'failed'
   const [correctCount, setCorrectCount] = useState(0);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [_combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+
+
 
   const currentQ = questions[currentIdx];
   const progressPercent = questions.length > 0 ? ((currentIdx) / questions.length) * 100 : 0;
 
   // Speak prompt on change if audio exists
   useEffect(() => {
-    if (currentQ?.audioText) {
-      sounds.speak(currentQ.audioText, selectedLanguage.code);
+    if (isOpen && currentQ?.audioText) {
+      sounds.speak(currentQ.audioText, selectedLanguage?.code);
     }
-  }, [currentIdx, currentQ]);
+  }, [isOpen, currentIdx, currentQ, selectedLanguage?.code]);
 
   // Clean state when moving to next question
   const resetQuestionState = () => {
@@ -54,8 +60,8 @@ export default function LessonModal({
   };
 
   // Check answers
-  const handleCheckAnswer = () => {
-    if (!currentQ) return;
+  const handleCheckAnswer = useCallback(() => {
+    if (!currentQ || status !== 'idle') return;
     let isCorrect = false;
 
     if (currentQ.type === 'multiple-choice' || currentQ.type === 'listening' || currentQ.type === 'fill-blank') {
@@ -78,16 +84,85 @@ export default function LessonModal({
       sounds.playCorrect();
       setStatus('correct');
       setCorrectCount(prev => prev + 1);
+      setCombo(prev => {
+        const next = prev + 1;
+        setMaxCombo(m => Math.max(m, next));
+        return next;
+      });
     } else {
       sounds.playWrong();
       setStatus('wrong');
+      setCombo(0);
       onDeductHeart();
       if (hearts <= 1) {
-        // Will run out of hearts on this wrong answer
         setStatus('failed');
       }
     }
-  };
+  }, [currentQ, status, selectedOption, selectedSentenceWords, matchedPairs, onDeductHeart, hearts]);
+
+  // Move to next question or complete lesson
+  const handleContinue = useCallback(() => {
+    sounds.playPop();
+    if (currentIdx + 1 < questions.length) {
+      setCurrentIdx(prev => prev + 1);
+      resetQuestionState();
+    } else {
+      // Completed lesson!
+      sounds.playFanfare();
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+      setStatus('completed');
+      onCompleteLesson(lesson.id, lesson.xp || 20);
+    }
+  }, [currentIdx, questions.length, lesson, onCompleteLesson]);
+
+  // Keyboard Shortcuts: 1-9 for choices, Enter for Check / Continue
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      // Don't intercept if typing in an input
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowQuitConfirm(prev => !prev);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (showQuitConfirm) {
+          setShowQuitConfirm(false);
+          return;
+        }
+        if (status === 'idle') {
+          // Check answer if valid option selected
+          if (
+            (currentQ?.type === 'multiple-choice' || currentQ?.type === 'listening' || currentQ?.type === 'fill-blank') && selectedOption
+          ) {
+            handleCheckAnswer();
+          } else if (currentQ?.type === 'sentence-builder' && selectedSentenceWords.length > 0) {
+            handleCheckAnswer();
+          } else if (currentQ?.type === 'match-pairs' && matchedPairs.length === currentQ.pairs.length) {
+            handleCheckAnswer();
+          }
+        } else if (status === 'correct' || status === 'wrong') {
+          handleContinue();
+        }
+      } else if (status === 'idle' && (currentQ?.type === 'multiple-choice' || currentQ?.type === 'listening' || currentQ?.type === 'fill-blank')) {
+        const num = parseInt(e.key, 10);
+        if (!isNaN(num) && num >= 1 && num <= (currentQ.options?.length || 0)) {
+          e.preventDefault();
+          sounds.playPop();
+          setSelectedOption(currentQ.options[num - 1]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, status, currentQ, selectedOption, selectedSentenceWords, matchedPairs, showQuitConfirm, handleCheckAnswer, handleContinue]);
+
+  if (!isOpen || !lesson) return null;
 
   // Handle Match Pairs tap
   const handlePairClick = (side, item) => {
@@ -137,26 +212,6 @@ export default function LessonModal({
     }
   };
 
-  // Move to next question or complete lesson
-  const handleContinue = () => {
-    sounds.playPop();
-    if (currentIdx + 1 < questions.length) {
-      setCurrentIdx(prev => prev + 1);
-      resetQuestionState();
-    } else {
-      // Completed lesson!
-      sounds.playFanfare();
-      confetti({
-        particleCount: 120,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-      setStatus('completed');
-      onCompleteLesson(lesson.id, lesson.xp || 20);
-    }
-  };
-
-  // Check if answer button should be disabled
   const isCheckDisabled = () => {
     if (status !== 'idle') return true;
     if (currentQ?.type === 'multiple-choice' || currentQ?.type === 'listening' || currentQ?.type === 'fill-blank') {
@@ -172,34 +227,48 @@ export default function LessonModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-white flex flex-col justify-between overflow-y-auto animate-in fade-in duration-200">
+    <div className={`fixed inset-0 z-50 flex flex-col justify-between overflow-y-auto animate-in fade-in duration-200 select-none ${
+      isDark ? 'bg-[#131f24] text-white' : 'bg-white text-slate-800'
+    }`}>
       
-      {/* Top Header */}
-      <div className="max-w-4xl mx-auto w-full px-4 sm:px-8 py-4 flex items-center justify-between gap-4 border-b border-slate-100">
+      {/* Top Header Bar */}
+      <div className={`max-w-4xl mx-auto w-full px-4 sm:px-8 py-4 flex items-center justify-between gap-4 border-b ${
+        isDark ? 'border-slate-800' : 'border-slate-100'
+      }`}>
+        {/* Exit Button */}
         <button
           onClick={() => {
             sounds.playPop();
-            onClose();
+            setShowQuitConfirm(true);
           }}
-          className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+          className={`p-2 rounded-2xl transition cursor-pointer ${
+            isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+          }`}
+          title="Quit Lesson"
         >
-          <X className="w-6 h-6 stroke-[2.5]" />
+          <X className="w-6 h-6 stroke-[3]" />
         </button>
 
-        {/* Progress Bar */}
-        <div className="flex-1 bg-slate-200 h-4 rounded-full overflow-hidden p-0.5 relative">
+        {/* Duolingo Progress Bar with Gloss Sheen */}
+        <div className={`flex-1 h-4 rounded-full overflow-hidden p-0.5 relative ${
+          isDark ? 'bg-slate-800' : 'bg-slate-200'
+        }`}>
           <div
-            className="bg-emerald-500 h-full rounded-full transition-all duration-300 relative"
+            className="bg-gradient-to-r from-emerald-500 to-teal-500 h-full rounded-full transition-all duration-300 relative shadow-sm"
             style={{ width: `${status === 'completed' ? 100 : progressPercent}%` }}
           >
-            <div className="absolute top-0.5 right-1 left-1 h-1 bg-white/30 rounded-full" />
+            <div className="absolute top-0.5 right-1 left-1 h-1 bg-white/40 rounded-full progress-gloss" />
           </div>
         </div>
 
-        {/* Hearts */}
-        <div className="flex items-center gap-1.5 font-black text-rose-500 bg-rose-50 px-3 py-1.5 rounded-2xl border border-rose-200">
+        {/* Hearts Indicator */}
+        <div className={`flex items-center gap-1.5 font-black text-rose-500 px-3 py-1.5 rounded-2xl border ${
+          isDark ? 'bg-rose-950/30 border-rose-900/40' : 'bg-rose-50 border-rose-200'
+        }`}>
           <Heart className="w-5 h-5 fill-rose-500 text-rose-500 animate-pulse" />
-          <span className="text-sm">{hearts}</span>
+          <span className="text-sm font-black">
+            {hearts}
+          </span>
         </div>
       </div>
 
@@ -210,34 +279,63 @@ export default function LessonModal({
         {status === 'completed' && (
           <div className="text-center space-y-6 py-8 animate-in zoom-in-95 duration-300">
             <div className="flex justify-center">
-              <Mascot mood="cheering" size={130} />
+              <Mascot mood="cheering" size={135} outfit={equippedOutfit} />
             </div>
             <div>
-              <span className="text-xs font-black uppercase tracking-widest text-amber-600 bg-amber-100 px-3 py-1 rounded-full">
+              <span className="text-xs font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950 px-3 py-1 rounded-full">
                 शाबाश! / Excellent Work!
               </span>
-              <h2 className="text-3xl font-black text-slate-800 mt-3">
+              <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-3">
                 Lesson Completed!
               </h2>
-              <p className="text-sm font-semibold text-slate-500 mt-1">
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1">
                 You’re mastering {selectedLanguage.name} step by step.
               </p>
             </div>
 
             {/* Stats Summary Cards */}
-            <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
-              <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
-                <p className="text-xs font-bold text-amber-700 uppercase">Total XP</p>
-                <p className="text-2xl font-black text-amber-600 mt-1">+{lesson.xp}</p>
+            {correctCount === questions.length && (
+              <div className="flex justify-center mb-2 animate-bounce">
+                <span className="text-sm font-black uppercase tracking-widest text-amber-500 bg-amber-100 dark:bg-amber-900/40 border-2 border-amber-400 px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+                  ✨ NO MISTAKES! ✨
+                </span>
               </div>
-              <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-4">
-                <p className="text-xs font-bold text-emerald-700 uppercase">Accuracy</p>
-                <p className="text-2xl font-black text-emerald-600 mt-1">
+            )}
+            
+            <div className="grid grid-cols-2 gap-3 max-w-md mx-auto sm:grid-cols-4">
+              <div className={`border-2 rounded-2xl p-4 col-span-2 sm:col-span-1 flex flex-col justify-center ${
+                isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-amber-50 border-amber-200'
+              }`}>
+                <p className="text-xs font-black text-amber-500 uppercase">Total XP</p>
+                <div className="mt-1">
+                  <p className="text-2xl font-black text-amber-500">
+                    +{lesson.xp + (correctCount === questions.length ? 5 : 0)}
+                  </p>
+                  {correctCount === questions.length && (
+                    <p className="text-[10px] font-bold text-amber-600 mt-0.5 whitespace-nowrap">Perfect Bonus: +5</p>
+                  )}
+                </div>
+              </div>
+              <div className={`border-2 rounded-2xl p-4 col-span-1 ${
+                isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-emerald-50 border-emerald-200'
+              }`}>
+                <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase">Accuracy</p>
+                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
                   {Math.round((correctCount / questions.length) * 100)}%
                 </p>
               </div>
-              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4">
-                <p className="text-xs font-bold text-orange-700 uppercase">Streak</p>
+              <div className={`border-2 rounded-2xl p-4 col-span-1 ${
+                isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-blue-50 border-blue-200'
+              }`}>
+                <p className="text-[10px] sm:text-xs font-black text-blue-600 dark:text-blue-400 uppercase">Max Combo</p>
+                <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
+                  {maxCombo}
+                </p>
+              </div>
+              <div className={`border-2 rounded-2xl p-4 col-span-2 sm:col-span-1 flex flex-col justify-center ${
+                isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-orange-50 border-orange-200'
+              }`}>
+                <p className="text-xs font-black text-orange-500 uppercase">Streak</p>
                 <p className="text-2xl font-black text-orange-500 mt-1 flex items-center justify-center gap-1">
                   <span>🔥</span> +1
                 </p>
@@ -246,7 +344,7 @@ export default function LessonModal({
 
             <button
               onClick={onClose}
-              className="w-full max-w-md py-4 rounded-2xl font-black text-base text-white btn-3d-green tracking-wide cursor-pointer"
+              className="w-full max-w-md py-4 rounded-2xl font-black text-base btn-duo-green tracking-wider uppercase cursor-pointer"
             >
               CONTINUE TO LEARNING PATH
             </button>
@@ -257,17 +355,17 @@ export default function LessonModal({
         {status === 'failed' && (
           <div className="text-center space-y-6 py-8 animate-in zoom-in-95 duration-300">
             <div className="flex justify-center">
-              <Mascot mood="sad" size={130} />
+              <Mascot mood="sad" size={135} outfit={equippedOutfit} />
             </div>
             <div>
-              <span className="text-xs font-black uppercase tracking-widest text-rose-600 bg-rose-100 px-3 py-1 rounded-full">
+              <span className="text-xs font-black uppercase tracking-widest text-rose-600 bg-rose-100 dark:bg-rose-950 px-3 py-1 rounded-full">
                 Out of Hearts!
               </span>
-              <h2 className="text-3xl font-black text-slate-800 mt-3">
+              <h2 className="text-3xl font-black text-slate-800 dark:text-white mt-3">
                 Don't Give Up! कोई बात नहीं!
               </h2>
-              <p className="text-sm font-semibold text-slate-500 mt-1">
-                Language learning takes practice. You can refill hearts with your Chai points in the sidebar!
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-1">
+                Refill hearts with Chai points in the Shop to keep learning!
               </p>
             </div>
 
@@ -277,13 +375,15 @@ export default function LessonModal({
                   resetQuestionState();
                   setCurrentIdx(0);
                 }}
-                className="flex-1 py-3.5 rounded-2xl font-bold border-2 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                className={`flex-1 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition cursor-pointer ${
+                  isDark ? 'border-slate-700 bg-slate-800 hover:bg-slate-700' : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                }`}
               >
                 Retry Lesson
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 py-3.5 rounded-2xl font-black text-white btn-3d-blue cursor-pointer"
+                className="flex-1 py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider btn-duo-blue text-white cursor-pointer"
               >
                 Back to Path
               </button>
@@ -295,28 +395,33 @@ export default function LessonModal({
         {status !== 'completed' && status !== 'failed' && currentQ && (
           <div className="space-y-6">
             
-            {/* Question Title & Audio Header */}
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-                  Question {currentIdx + 1} of {questions.length}
-                </span>
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">
-                  {currentQ.type.replace('-', ' ')}
-                </span>
+            {/* Header prompt with Mascot Speech Bubble */}
+            <div className="flex items-start gap-4">
+              <Mascot mood="happy" size={75} outfit={equippedOutfit} className="shrink-0 hidden sm:flex" />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-400">
+                    Question {currentIdx + 1} of {questions.length}
+                  </span>
+                  <span className="text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg uppercase">
+                    {currentQ.type.replace('-', ' ')}
+                  </span>
+                </div>
+                <h3 className="text-2xl font-black leading-snug">
+                  {currentQ.prompt}
+                </h3>
               </div>
-              <h3 className="text-2xl font-black text-slate-800 mt-1 leading-snug">
-                {currentQ.prompt}
-              </h3>
             </div>
 
             {/* Audio Pronunciation Button Bar */}
             {currentQ.audioText && (
-              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+              <div className={`flex items-center gap-2 p-3 rounded-2xl border ${
+                isDark ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200/80'
+              }`}>
                 <button
                   onClick={() => sounds.speak(currentQ.audioText, selectedLanguage.code)}
-                  className="p-3 rounded-xl btn-3d-blue text-white cursor-pointer"
-                  title="Listen"
+                  className="p-3 rounded-xl btn-duo-blue text-white cursor-pointer"
+                  title="Listen (Native Speed)"
                 >
                   <Volume2 className="w-6 h-6" />
                 </button>
@@ -329,18 +434,20 @@ export default function LessonModal({
                       window.speechSynthesis.speak(u);
                     }
                   }}
-                  className="p-3 rounded-xl border-2 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer"
+                  className={`p-3 rounded-xl border-2 transition cursor-pointer ${
+                    isDark ? 'border-slate-700 hover:bg-slate-700 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                  }`}
                   title="Listen Slower"
                 >
-                  <Turtle className="w-6 h-6 text-emerald-600" />
+                  <Turtle className="w-6 h-6 text-emerald-500" />
                 </button>
                 <div className="ml-2">
-                  <p className="font-extrabold text-base text-slate-800">
+                  <p className="font-black text-lg">
                     {currentQ.audioText}
                   </p>
                   {currentQ.targetRoman && showTransliteration && (
-                    <p className="text-xs font-semibold text-slate-400">
-                      {currentQ.targetRoman}
+                    <p className="text-xs font-bold text-slate-400">
+                      /{currentQ.targetRoman}/
                     </p>
                   )}
                 </div>
@@ -362,21 +469,25 @@ export default function LessonModal({
                         }
                       }}
                       disabled={status !== 'idle'}
-                      className={`w-full p-4 rounded-2xl border-2 text-left font-bold text-base transition-all flex items-center justify-between group cursor-pointer btn-3d-card ${
+                      className={`w-full p-4 rounded-2xl border-2 font-bold text-base transition-all flex items-center justify-between group cursor-pointer btn-duo-card ${
                         isChosen
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 border-b-emerald-600 ring-2 ring-emerald-400/20'
-                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700 border-b-slate-300'
+                          ? isDark
+                            ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300 border-b-emerald-600 ring-2 ring-emerald-500/30'
+                            : 'border-emerald-500 bg-emerald-50 text-emerald-900 border-b-emerald-600 ring-2 ring-emerald-400/30'
+                          : ''
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <span className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black border ${
                           isChosen
                             ? 'bg-emerald-500 text-white border-emerald-500'
+                            : isDark
+                            ? 'bg-slate-800 text-slate-400 border-slate-700 group-hover:bg-slate-700'
                             : 'bg-slate-100 text-slate-500 border-slate-200 group-hover:bg-slate-200'
                         }`}>
                           {idx + 1}
                         </span>
-                        <span>{opt.text}</span>
+                        <span className="font-extrabold">{opt.text}</span>
                       </div>
                     </button>
                   );
@@ -388,9 +499,11 @@ export default function LessonModal({
             {currentQ.type === 'sentence-builder' && (
               <div className="space-y-6 pt-2">
                 {/* Target Sentence Area / Slot */}
-                <div className="min-h-[70px] p-4 bg-slate-50 border-b-2 border-dashed border-slate-300 rounded-2xl flex flex-wrap gap-2 items-center">
+                <div className={`min-h-[72px] p-4 rounded-2xl border-b-3 border-dashed flex flex-wrap gap-2.5 items-center transition-colors ${
+                  isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-300'
+                }`}>
                   {selectedSentenceWords.length === 0 ? (
-                    <span className="text-sm font-semibold text-slate-400 italic">
+                    <span className="text-sm font-bold text-slate-400 italic">
                       Tap words below to form the sentence...
                     </span>
                   ) : (
@@ -403,7 +516,11 @@ export default function LessonModal({
                             setSelectedSentenceWords(prev => prev.filter((_, i) => i !== wIdx));
                           }
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-white border-2 border-slate-300 border-b-4 border-b-slate-400 text-slate-800 font-extrabold text-sm shadow-sm hover:border-rose-400 hover:text-rose-600 transition cursor-pointer"
+                        className={`px-4 py-2.5 rounded-2xl font-black text-sm border-2 border-b-4 transition cursor-pointer shadow-sm ${
+                          isDark
+                            ? 'bg-slate-800 border-slate-700 border-b-slate-600 text-white hover:border-rose-400'
+                            : 'bg-white border-slate-200 border-b-slate-300 text-slate-800 hover:border-rose-400'
+                        }`}
                         title="Click to remove"
                       >
                         {word}
@@ -431,8 +548,12 @@ export default function LessonModal({
                         disabled={isExhausted || status !== 'idle'}
                         className={`px-4 py-2.5 rounded-2xl font-black text-base transition-all border-2 border-b-4 cursor-pointer ${
                           isExhausted
-                            ? 'bg-slate-100 border-slate-200 border-b-slate-200 text-transparent pointer-events-none'
-                            : 'bg-white border-slate-200 border-b-slate-300 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 active:translate-y-1'
+                            ? isDark
+                              ? 'bg-slate-800/30 border-slate-800 border-b-slate-800 text-transparent pointer-events-none'
+                              : 'bg-slate-100 border-slate-200 border-b-slate-200 text-transparent pointer-events-none'
+                            : isDark
+                            ? 'bg-slate-800 border-slate-700 border-b-slate-600 text-slate-100 hover:border-emerald-500 active:translate-y-1'
+                            : 'bg-white border-slate-200 border-b-slate-300 text-slate-800 hover:border-emerald-400 hover:bg-emerald-50 active:translate-y-1'
                         }`}
                       >
                         {word}
@@ -446,7 +567,7 @@ export default function LessonModal({
             {/* 3. MATCH PAIRS */}
             {currentQ.type === 'match-pairs' && (
               <div className="space-y-4 pt-2">
-                <p className="text-xs font-bold text-slate-500 text-center">
+                <p className="text-xs font-bold text-slate-400 text-center uppercase tracking-wider">
                   Matched {matchedPairs.length} of {currentQ.pairs.length} pairs
                 </p>
                 <div className="grid grid-cols-2 gap-4">
@@ -461,13 +582,15 @@ export default function LessonModal({
                           key={idx}
                           onClick={() => handlePairClick('left', p)}
                           disabled={isMatched || status !== 'idle'}
-                          className={`w-full p-3.5 rounded-2xl border-2 border-b-4 text-center font-black text-sm transition-all cursor-pointer ${
+                          className={`w-full p-4 rounded-2xl border-2 border-b-4 text-center font-black text-sm transition-all cursor-pointer ${
                             isMatched
-                              ? 'bg-emerald-100 border-emerald-300 border-b-emerald-400 text-emerald-800 opacity-60 cursor-default'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 opacity-60 cursor-default'
                               : isSelected
-                              ? 'bg-amber-100 border-amber-400 border-b-amber-500 text-amber-900 ring-2 ring-amber-300'
-                              : 'bg-white border-slate-200 border-b-slate-300 hover:border-emerald-300 text-slate-700'
-                          } ${pairError && isSelected ? 'animate-shake bg-rose-100 border-rose-400' : ''}`}
+                              ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-400 border-b-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-300'
+                              : isDark
+                              ? 'bg-slate-800 border-slate-700 border-b-slate-600 text-slate-100 hover:border-emerald-400'
+                              : 'bg-white border-slate-200 border-b-slate-300 text-slate-800 hover:border-emerald-400'
+                          } ${pairError && isSelected ? 'animate-shake bg-rose-100 border-rose-400 text-rose-900' : ''}`}
                         >
                           {p.left}
                         </button>
@@ -477,7 +600,6 @@ export default function LessonModal({
 
                   {/* Right Column */}
                   <div className="space-y-2.5">
-                    {/* Shuffle or stable map */}
                     {currentQ.pairs.slice().reverse().map((p, idx) => {
                       const isMatched = matchedPairs.some(
                         key => currentQ.pairs.find(item => item.left === key)?.right === p.right
@@ -489,13 +611,15 @@ export default function LessonModal({
                           key={idx}
                           onClick={() => handlePairClick('right', p)}
                           disabled={isMatched || status !== 'idle'}
-                          className={`w-full p-3.5 rounded-2xl border-2 border-b-4 text-center font-black text-sm transition-all cursor-pointer ${
+                          className={`w-full p-4 rounded-2xl border-2 border-b-4 text-center font-black text-sm transition-all cursor-pointer ${
                             isMatched
-                              ? 'bg-emerald-100 border-emerald-300 border-b-emerald-400 text-emerald-800 opacity-60 cursor-default'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 opacity-60 cursor-default'
                               : isSelected
-                              ? 'bg-amber-100 border-amber-400 border-b-amber-500 text-amber-900 ring-2 ring-amber-300'
-                              : 'bg-white border-slate-200 border-b-slate-300 hover:border-emerald-300 text-slate-700'
-                          } ${pairError && isSelected ? 'animate-shake bg-rose-100 border-rose-400' : ''}`}
+                              ? 'bg-amber-100 dark:bg-amber-950/50 border-amber-400 border-b-amber-500 text-amber-900 dark:text-amber-200 ring-2 ring-amber-300'
+                              : isDark
+                              ? 'bg-slate-800 border-slate-700 border-b-slate-600 text-slate-100 hover:border-emerald-400'
+                              : 'bg-white border-slate-200 border-b-slate-300 text-slate-800 hover:border-emerald-400'
+                          } ${pairError && isSelected ? 'animate-shake bg-rose-100 border-rose-400 text-rose-900' : ''}`}
                         >
                           {p.right}
                         </button>
@@ -514,28 +638,30 @@ export default function LessonModal({
       {/* Bottom Feedback Drawer */}
       {status !== 'completed' && status !== 'failed' && (
         <div className={`border-t-2 px-4 sm:px-8 py-5 transition-colors ${
-          status === 'correct' ? 'bg-emerald-100 border-emerald-300' :
-          status === 'wrong' ? 'bg-rose-100 border-rose-300' :
-          'bg-white border-slate-100'
+          status === 'correct' 
+            ? isDark ? 'bg-emerald-950/80 border-emerald-800/60' : 'bg-emerald-100 border-emerald-300'
+            : status === 'wrong'
+            ? isDark ? 'bg-rose-950/80 border-rose-900/60' : 'bg-rose-100 border-rose-300'
+            : isDark ? 'bg-[#131f24] border-slate-800' : 'bg-white border-slate-100'
         }`}>
           <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             
-            {/* Feedback message */}
+            {/* Feedback Message */}
             {status === 'idle' ? (
-              <div className="text-xs font-semibold text-slate-400 hidden sm:block">
-                Take your time. Listen and select the right response!
+              <div className="text-xs font-black uppercase tracking-wider text-slate-400 hidden sm:block">
+                Press Enter ↵ or tap Check when ready
               </div>
             ) : status === 'correct' ? (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-6 h-6" />
+               <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <CheckCircle2 className="w-7 h-7" />
                 </div>
                 <div>
-                  <h4 className="font-black text-base text-emerald-900">
+                  <h4 className="font-black text-lg text-emerald-900 dark:text-emerald-200">
                     Excellent! शाबाश!
                   </h4>
                   {currentQ?.explanation && (
-                    <p className="text-xs text-emerald-700 font-medium max-w-md">
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 font-bold max-w-md">
                       {currentQ.explanation}
                     </p>
                   )}
@@ -543,15 +669,15 @@ export default function LessonModal({
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center shrink-0">
-                  <XCircle className="w-6 h-6" />
+                <div className="w-11 h-11 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <XCircle className="w-7 h-7" />
                 </div>
                 <div>
-                  <h4 className="font-black text-base text-rose-900">
-                    Not quite!
+                  <h4 className="font-black text-lg text-rose-900 dark:text-rose-200">
+                    Correct solution:
                   </h4>
-                  <p className="text-xs text-rose-700 font-semibold">
-                    {currentQ?.explanation || 'Review the correct phrasing and try again next time.'}
+                  <p className="text-xs text-rose-800 dark:text-rose-300 font-bold">
+                    {currentQ?.explanation || 'Review and keep practicing!'}
                   </p>
                 </div>
               </div>
@@ -563,26 +689,65 @@ export default function LessonModal({
                 <button
                   onClick={handleCheckAnswer}
                   disabled={isCheckDisabled()}
-                  className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all cursor-pointer ${
+                  className={`px-10 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all cursor-pointer ${
                     isCheckDisabled()
-                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                      : 'btn-3d-green text-white'
+                      ? 'btn-duo-gray'
+                      : 'btn-duo-green text-white shadow-md'
                   }`}
                 >
-                  Check
+                  CHECK
                 </button>
               ) : (
                 <button
                   onClick={handleContinue}
-                  className={`px-8 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider text-white transition-all cursor-pointer ${
-                    status === 'correct' ? 'btn-3d-green' : 'btn-3d-saffron'
+                  className={`px-10 py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider transition-all cursor-pointer ${
+                    status === 'correct' ? 'btn-duo-green text-white' : 'btn-duo-red text-white'
                   }`}
                 >
-                  Continue <ArrowRight className="w-4 h-4 inline ml-1" />
+                  CONTINUE <ArrowRight className="w-4 h-4 inline ml-1" />
                 </button>
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Duolingo Quit Session Confirmation Modal */}
+      {showQuitConfirm && (
+        <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className={`rounded-3xl max-w-sm w-full p-6 text-center space-y-4 border-2 shadow-2xl ${
+            isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'
+          }`}>
+            <div className="flex justify-center">
+              <Mascot mood="sad" size={100} outfit={equippedOutfit} />
+            </div>
+            <h3 className="text-xl font-black">
+              Wait, don't leave!
+            </h3>
+            <p className={`text-xs font-bold leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              All progress in this lesson will be lost if you quit now.
+            </p>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={() => setShowQuitConfirm(false)}
+                className="w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider btn-duo-green text-white cursor-pointer"
+              >
+                KEEP LEARNING
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuitConfirm(false);
+                  onClose();
+                }}
+                className={`w-full py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition cursor-pointer ${
+                  isDark ? 'text-rose-400 hover:bg-slate-800' : 'text-rose-600 hover:bg-rose-50'
+                }`}
+              >
+                END SESSION
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2,99 +2,238 @@
 
 @layer base {
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Nunito', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    letter-spacing: -0.01em;
   }
 }
 
-/* Theme variables and dark mode defaults */
+/* IndianLingo Theme Variables - Distinctive Royal Indian Tech Palette */
 :root {
-  --bg-main: #f8fafc;
+  --bg-main: #ffffff;
   --bg-card: #ffffff;
   --border-card: #e2e8f0;
+  --border-card-thick: #cbd5e1;
   --text-main: #1e293b;
   --text-muted: #64748b;
+  --brand-green: #059669; /* Royal Emerald / Peacock */
+  --brand-green-shadow: #047857;
+  --brand-blue: #2563eb;  /* Royal Azure */
+  --brand-blue-shadow: #1d4ed8;
+  --brand-red: #e11d48;   /* Gulal Crimson */
+  --brand-red-shadow: #be123c;
+  --brand-purple: #7c3aed; /* Royal Jamun / Amethyst */
+  --brand-purple-shadow: #6d28d9;
+  --brand-yellow: #f59e0b; /* Haldi Saffron */
+  --brand-yellow-shadow: #d97706;
+  --brand-orange: #ea580c; /* Kesari Marigold */
+  --brand-orange-shadow: #c2410c;
 }
 
 html.dark {
   --bg-main: #0f172a;
   --bg-card: #1e293b;
   --border-card: #334155;
+  --border-card-thick: #475569;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   color-scheme: dark;
 }
 
 html.theme-saffron {
-  --bg-main: #fff7ed;
+  --bg-main: #fffaf0;
   --bg-card: #ffffff;
-  --border-card: #fed7aa;
-  --text-main: #431407;
-  --text-muted: #9a3412;
+  --border-card: #fbd38d;
+  --border-card-thick: #f6ad55;
+  --text-main: #4a2810;
+  --text-muted: #9c4221;
 }
 
-/* Duolingo 3D Button style utilities */
-.btn-3d-green {
-  background-color: #58cc02;
-  box-shadow: 0 4px 0 #46a302;
-  transition: all 0.1s ease;
+/* IndianLingo 3D Chunky Buttons */
+.btn-duo-green {
+  background-color: #059669;
+  border-bottom: 4px solid #047857;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
 }
-.btn-3d-green:hover {
-  background-color: #61e002;
+.btn-duo-green:hover:not(:disabled) {
+  background-color: #10b981;
 }
-.btn-3d-green:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #46a302;
-}
-
-.btn-3d-saffron {
-  background-color: #ff9933;
-  box-shadow: 0 4px 0 #cc6600;
-  transition: all 0.1s ease;
-}
-.btn-3d-saffron:hover {
-  background-color: #ffa74d;
-}
-.btn-3d-saffron:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #cc6600;
-}
-
-.btn-3d-blue {
-  background-color: #1cb0f6;
-  box-shadow: 0 4px 0 #1899d6;
-  transition: all 0.1s ease;
-}
-.btn-3d-blue:hover {
-  background-color: #2bd0f8;
-}
-.btn-3d-blue:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #1899d6;
-}
-
-.btn-3d-purple {
-  background-color: #ce82ff;
-  box-shadow: 0 4px 0 #a558dc;
-  transition: all 0.1s ease;
-}
-.btn-3d-purple:hover {
-  background-color: #d896ff;
-}
-.btn-3d-purple:active {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 #a558dc;
-}
-
-.btn-3d-card {
-  border-bottom-width: 4px;
-  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.btn-3d-card:active {
+.btn-duo-green:active:not(:disabled) {
   transform: translateY(3px);
   border-bottom-width: 1px;
 }
 
-/* Bounce animation */
+.btn-duo-blue {
+  background-color: #2563eb;
+  border-bottom: 4px solid #1d4ed8;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-duo-blue:hover:not(:disabled) {
+  background-color: #3b82f6;
+}
+.btn-duo-blue:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.btn-duo-purple {
+  background-color: #7c3aed;
+  border-bottom: 4px solid #6d28d9;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-duo-purple:hover:not(:disabled) {
+  background-color: #8b5cf6;
+}
+.btn-duo-purple:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.btn-duo-red {
+  background-color: #e11d48;
+  border-bottom: 4px solid #be123c;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-duo-red:hover:not(:disabled) {
+  background-color: #f43f5e;
+}
+.btn-duo-red:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.btn-duo-yellow {
+  background-color: #f59e0b;
+  border-bottom: 4px solid #d97706;
+  color: #78350f;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-duo-yellow:hover:not(:disabled) {
+  background-color: #fbbf24;
+}
+.btn-duo-yellow:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.btn-duo-orange {
+  background-color: #ea580c;
+  border-bottom: 4px solid #c2410c;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-duo-orange:hover:not(:disabled) {
+  background-color: #f97316;
+}
+.btn-duo-orange:active:not(:disabled) {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.btn-duo-gray {
+  background-color: #e2e8f0;
+  border-bottom: 4px solid #94a3b8;
+  color: #94a3b8;
+  font-weight: 800;
+  cursor: not-allowed;
+}
+
+html.dark .btn-duo-gray {
+  background-color: #2b3e48;
+  border-bottom: 4px solid #1f2d34;
+  color: #6a7c87;
+}
+
+/* IndianLingo Option Tile / Card */
+.btn-duo-card {
+  border: 2px solid #e5e5e5;
+  border-bottom-width: 4px;
+  border-bottom-color: #cecece;
+  border-radius: 1rem;
+  transition: all 0.08s ease;
+}
+.btn-duo-card:hover:not(:disabled) {
+  background-color: #f7f7f7;
+  border-color: #d1d5db;
+  border-bottom-color: #9ca3af;
+}
+.btn-duo-card:active:not(:disabled) {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+
+html.dark .btn-duo-card {
+  border-color: #2b3e48;
+  border-bottom-color: #1f2d34;
+  background-color: #18272f;
+}
+html.dark .btn-duo-card:hover:not(:disabled) {
+  background-color: #20333d;
+  border-color: #374e5c;
+  border-bottom-color: #273741;
+}
+
+/* Backward compatibility aliases */
+.btn-3d-green {
+  background-color: #059669;
+  border-bottom: 4px solid #047857;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-3d-blue {
+  background-color: #2563eb;
+  border-bottom: 4px solid #1d4ed8;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-3d-purple {
+  background-color: #7c3aed;
+  border-bottom: 4px solid #6d28d9;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-3d-saffron {
+  background-color: #ea580c;
+  border-bottom: 4px solid #c2410c;
+  color: #ffffff;
+  font-weight: 800;
+  transition: all 0.08s ease;
+}
+.btn-3d-card {
+  border: 2px solid #e2e8f0;
+  border-bottom-width: 4px;
+  border-bottom-color: #cbd5e1;
+  border-radius: 1rem;
+  transition: all 0.08s ease;
+}
+
+/* IndianLingo Progress Bar Gloss */
+.progress-gloss {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+/* Animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
 @keyframes bounce-subtle {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
@@ -103,11 +242,10 @@ html.theme-saffron {
   animation: bounce-subtle 2.5s infinite ease-in-out;
 }
 
-/* Pulse glow for active lesson nodes */
 @keyframes pulse-ring {
-  0% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(70, 163, 2, 0.5); }
-  70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 14px rgba(70, 163, 2, 0); }
-  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 rgba(70, 163, 2, 0); }
+  0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.6); }
+  70% { transform: scale(1.02); box-shadow: 0 0 0 16px rgba(5, 150, 105, 0); }
+  100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
 }
 .pulse-node {
   animation: pulse-ring 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
